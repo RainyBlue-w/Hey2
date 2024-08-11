@@ -1,0 +1,300 @@
+configfile: "config.yaml"
+workdir: config["workdir"]
+
+# pre-def vars
+THREADS = config["threads"]
+PAIRED = config["paired"]
+N_SAMPLE = len(config["sample"])
+N_GROUP = len(config["group"])
+
+# func
+def get_sra(wildcards):
+	return config["sra"][wildcards.sra]
+def get_fq(wildcards):
+	return config["fastq"][wildcards.fastq]
+def get_bam_treat(wildcards):
+	tmp = config["group_info"][wildcards.group]["treat"]
+	return expand("03.align/bam_filtered/{name}.bam",name=tmp)
+def get_bam_contrl(wildcards):
+	tmp = config["group_info"][wildcards.group]["control"]
+	return expand("03.align/bam_filtered/{name}.bam",name=tmp)
+
+# wildcards
+_fastq = config["fastq"].keys()
+_sample = config["sample"]
+_group = config["group"]
+
+# rule all's input
+all_rename = expand("01.fastq/raw/{fastq}.fq.gz", fastq=_fastq)
+all_fastqcRaw = "02.QC/raw/MultiQC.html"
+all_fastqcTrimmed = "02.QC/trimmed/MultiQC.html"
+
+if PAIRED:
+	all_trimmed = expand("01.fastq/trimmed/{sample}-{num}_val_{num}.fq.gz", sample=_sample, num=["1","2"])
+else:
+	all_trimmed = expand("01.fastq/trimmed/{sample}_trimmed.fq.gz", sample=_sample)
+
+all_align = expand("03.align/sam/{sample}.sam", sample = _sample)
+all_sam2bam = expand("03.align/bam/{sample}.bam", sample=_sample)
+all_bamFilt = expand("03.align/bam_filtered/{sample}.bam", sample=_sample)
+all_bamIndex = expand("03.align/bam_filtered/{sample}.bam.bai", sample=_sample)
+all_bamQC = expand("02.QC/bamQC_filtered/{sample}/{sample}.pdf", sample=_sample)
+all_bamQCpre = expand("02.QC/bamQC/{sample}/{sample}.pdf", sample=_sample)
+all_bam2bw = expand("03.align/bw/{sample}.bw", sample=_sample)
+all_callpeak = expand("04.callpeak/{group}", group = _group)
+
+rule all:
+	input:
+		all_rename,
+		all_fastqcRaw,
+		all_trimmed,
+		all_fastqcTrimmed,
+		all_align,
+		all_sam2bam,
+		all_bamQCpre,
+		all_bamFilt,
+		all_bamIndex,
+		all_bamQC,
+		all_bam2bw,
+		all_callpeak
+
+rule rename:
+	input:
+		get_fq
+	output:
+		"01.fastq/raw/{fastq}.fq.gz"
+	shell:
+		"ln -s {input} {output} "
+
+rule fastQC_raw:
+	input:
+		expand("01.fastq/raw/{fastq}.fq.gz", fastq = _fastq)
+	output:
+		dir_fqc = directory("02.QC/raw/fqc"),
+		dir_mqc = directory("02.QC/raw"),
+		html_multi = "02.QC/raw/MultiQC.html",
+		html_raws = expand("02.QC/raw/fqc/{fastq}_fastqc.html", fastq=_fastq)
+	threads: THREADS
+	params:
+		para = config["fastqc"]["para"],
+	log:
+		"logs/QC/QC_raw.log"
+	shell:
+		"fastqc {params.para} -t {threads} -o {output.dir_fqc} {input} &> {log}; "
+		"multiqc -n MultiQC -o {output.dir_mqc} {output.dir_fqc} &>> {log}; "
+
+if PAIRED:
+	rule trim:
+		input:
+			r1 = "01.fastq/raw/{sample}-1.fq.gz",
+			r2 = "01.fastq/raw/{sample}-2.fq.gz"
+		output:
+			r1 = "01.fastq/trimmed/{sample}-1_val_1.fq.gz",
+			r2 = "01.fastq/trimmed/{sample}-2_val_2.fq.gz"
+		log:
+			"logs/trim/{sample}_trim.log"
+		params:
+			odir = "01.fastq/trimmed",
+			para = config["trim"]["para"]
+		threads: THREADS/N_SAMPLE
+		shell:
+			"trim_galore {params.para} --paired -j {threads} -o {params.odir} {input.r1} {input.r2} &> {log}"
+
+	rule fastQC_trimmed:
+		input:
+			expand("01.fastq/trimmed/{sample}-{num}_val_{num}.fq.gz", sample = _sample, num = ["1", "2"])
+		output:
+			html_multi = "02.QC/trimmed/MultiQC.html",
+			data_multi = directory("02.QC/trimmed/MultiQC_data"),
+			trimmed = expand("02.QC/trimmed/fqc/{sample}-{num}_val_{num}_fastqc.{ext}", 
+								sample=_sample, ext=["zip", "html"], num = ["1", "2"]),
+		threads: THREADS
+		params:
+			dir_fqc = "02.QC/trimmed/fqc",
+			dir_mqc = "02.QC/trimmed",
+			para = config["fastqc"]["para"],
+		log:
+			"logs/QC/QC_trimmed.log"
+		shell:
+			"fastqc {params.para} -t {threads} -o {params.dir_fqc} {input} &> {log}; "
+			"multiqc -n MultiQC -o {params.dir_mqc} {params.dir_fqc} &>> {log}; "
+	
+	rule align:
+		input:
+			r1 = "01.fastq/trimmed/{sample}-1_val_1.fq.gz",
+			r2 = "01.fastq/trimmed/{sample}-2_val_2.fq.gz"
+		output:
+			sam = "03.align/sam/{sample}.sam",
+		params:
+			ref = config["hisat2"]["ref"],
+			para = config["hisat2"]["para"]
+		threads:
+			THREADS/N_SAMPLE
+		log:
+			"logs/align/{sample}_aln.log"
+		shell:
+			"hisat2 -p {threads} -x {params.ref} {params.para} -1 {input.r1} -2 {input.r2} -S {output.sam} &> {log}; "
+else:
+	rule trim:
+		input:
+			"01.fastq/raw/{sample}.fq.gz",
+		output:
+			r1 = "01.fastq/trimmed/{sample}_trimmed.fq.gz",
+		log:
+			"logs/trim/{sample}_trim.log"
+		params:
+			odir = "01.fastq/trimmed",
+			para = config["trim"]["para"],
+		threads: THREADS/N_SAMPLE
+		shell:
+			"trim_galore {params.para} -j {threads} -o {params.odir} {input} &> {log}"
+
+	rule fastQC_trimmed:
+		input:
+			expand("01.fastq/trimmed/{sample}_trimmed.fq.gz", sample = _sample)
+		output:
+			html_multi = "02.QC/trimmed/MultiQC.html",
+			data_multi = directory("02.QC/trimmed/MultiQC_data"),
+			trimmed = expand("02.QC/trimmed/fqc/{sample}_trimmed_fastqc.{ext}", 
+								sample=_sample, ext=["zip", "html"]),
+		threads: THREADS
+		params:
+			dir_fqc = "02.QC/trimmed/fqc",
+			dir_mqc = "02.QC/trimmed",
+			para = config["fastqc"]["para"],
+		log:
+			"logs/QC/QC_trimmed.log"
+		shell:
+			"fastqc {params.para} -t {threads} -o {params.dir_fqc} {input} &> {log}; "
+			"multiqc -n MultiQC -o {params.dir_mqc} {params.dir_fqc} &>> {log}; "
+	
+	rule align:
+		input:
+			"01.fastq/trimmed/{sample}_trimmed.fq.gz"
+		output:
+			sam = "03.align/sam/{sample}.sam",
+		params:
+			ref = config["hisat2"]["ref"],
+			para = config["hisat2"]["para"]
+		threads: THREADS/N_SAMPLE
+		log:
+			"logs/align/{sample}_aln.log"
+		shell:
+			"hisat2 -p {threads} -x {params.ref} {params.para} -U {input} -S {output.sam} &> {log}; "
+
+
+rule sam2bam:
+	input:
+		sam = "03.align/sam/{sample}.sam"
+	output:
+		bam = "03.align/bam/{sample}.bam"
+	threads: THREADS/N_SAMPLE
+	log:
+		"logs/sam2bam/{sample}_sam2bam.log"
+	shell:
+		"samtools sort -O bam -@ {threads} -o {output.bam} {input.sam} &> {log} "
+
+rule bam_filter:
+	input:
+		bam = "03.align/bam/{sample}.bam"
+	output:
+		bam = "03.align/bam_filtered/{sample}.bam",
+		tmpFilt = temp("03.align/bam_filtered/{sample}.tmpFilt.bam"),
+	log:
+		"logs/bam_filter/{sample}_bamFilter.log",
+	params:
+		para_dup = config["sambamba"]["markdup"],
+		para_view = config["sambamba"]["view"]
+	threads: THREADS/N_SAMPLE
+	shell:
+		"samtools view {params.para_view} -@ {threads} -b  {input.bam} 1> {output.tmpFilt} 2> {log};"
+		"sambamba markdup {params.para_dup} -t {threads} --tmpdir=03.align/bam_filtered/ " 
+		"{output.tmpFilt} {output.bam} 2>> {log};"
+
+
+rule bamIndex:
+	input:
+		bam1 = "03.align/bam/{sample}.bam",
+		bam2 = "03.align/bam_filtered/{sample}.bam"
+	output:
+		bai1 = "03.align/bam/{sample}.bam.bai",
+		bai2 = "03.align/bam_filtered/{sample}.bam.bai"
+	threads: THREADS/N_SAMPLE
+	log:
+		log1 = "logs/bamIndex/{sample}_bamIndex.log",
+		log2 = "logs/bamIndex/{sample}_bamFilteredIndex.log"
+	shell:
+		"samtools index -@ {threads} {input.bam1} &> {log.log1};"
+		"samtools index -@ {threads} {input.bam2} &> {log.log2}"
+
+rule bamQC:
+	input:
+		bam = "03.align/bam_filtered/{sample}.bam"
+	output:
+		pdf = "02.QC/bamQC_filtered/{sample}/{sample}.pdf"
+	params:
+		odir = "02.QC/bamQC_filtered/{sample}",
+		oprefix = "{sample}",
+		para = config["qualimap"]["bamqc"]["para"],
+		gtf = config["gtf"]
+	threads: THREADS/N_SAMPLE
+	log:
+		"logs/bamQC/{sample}_bamQC.log"
+	shell:
+		"qualimap bamqc {params.para} -nt {threads} -gff {params.gtf} "
+		"-bam {input.bam} -outdir {params.odir} -outfile {params.oprefix} &> {log}; "
+
+rule bamQC_pre:
+	input:
+		bam = "03.align/bam/{sample}.bam"
+	output:
+		pdf = "02.QC/bamQC/{sample}/{sample}.pdf"
+	params:
+		odir = "02.QC/bamQC/{sample}",
+		oprefix = "{sample}",
+		para = config["qualimap"]["bamqc"]["para"],
+		gtf = config["gtf"]
+	threads: 
+		THREADS/N_SAMPLE
+	log:
+		"logs/bamQC/{sample}_bamQC.log"
+	shell:
+		"qualimap bamqc {params.para} -nt {threads} -gff {params.gtf} "
+		"-bam {input.bam} -outdir {params.odir} -outfile {params.oprefix} &> {log}; "
+
+rule bam2bw:
+	input:
+		bam = "03.align/bam_filtered/{sample}.bam",
+		bai = "03.align/bam_filtered/{sample}.bam.bai"
+	output:
+		"03.align/bw/{sample}.bw"
+	params:
+		config["bamCoverage"]["para"]
+	threads: 
+		THREADS/N_SAMPLE
+	log:
+		"logs/bam2bw/{sample}_bam2bw.log"
+	shell:
+		"bamCoverage {params} -b {input.bam} -o {output} -p {threads} &> {log}"
+
+rule macs2_callpeak:
+	input:
+		treat = get_bam_treat,
+		control = get_bam_contrl
+	output:
+		# expand("04.callpeak/{group}/{group}_{ext}", 
+		# 	ext=["peaks.narrowPeak","summits.bed","peaks.xls","model.r","treat_pileup.bdg","control_lambda.bdg"], 
+		# 	allow_missing=True)
+		directory("04.callpeak/{group}")
+	params:
+		odir = "04.callpeak/{group}",
+		prefix = "{group}",
+		para = config["macs2"]["callpeak"]["para"]
+	log:
+		"logs/macs2_callpeak/{group}_callpeak.log"
+	threads:
+		1
+	shell:
+		"macs2 callpeak {params.para} -t {input.treat} -c {input.control} --outdir {params.odir} -n {params.prefix} &> {log}"
+
+

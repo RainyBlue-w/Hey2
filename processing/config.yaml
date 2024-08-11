@@ -1,0 +1,114 @@
+workdir: ./result
+threads: 64
+
+#----Ref info----
+ref: /home/wuc/Ref/rn7/rn7
+gtf: /home/wuc/GTF/rn7/rn7_ncbiRefSeq.gtf
+
+#----Seq info----
+paired: true
+phred: 33
+
+#-----sample info----
+fastq:
+# 双端测序的两个fq, key需分别以 '-1', '-2'结尾标记
+  CTL-Flag-1-1:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/CTL-Flag-1_L1_1.fq.gz
+  CTL-Flag-1-2:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/CTL-Flag-1_L1_2.fq.gz
+  CTL-Flag-2-1:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/CTL-Flag-2_L1_1.fq.gz
+  CTL-Flag-2-2:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/CTL-Flag-2_L1_2.fq.gz
+
+  CTL-K9-1-1:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/CTL-K9-1_L1_1.fq.gz
+  CTL-K9-1-2:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/CTL-K9-1_L1_2.fq.gz
+  CTL-K9-2-1:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/CTL-K9-2_L1_1.fq.gz
+  CTL-K9-2-2:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/CTL-K9-2_L1_2.fq.gz
+
+  CTL-K27-1-1:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/CTL-K27-1_L1_1.fq.gz
+  CTL-K27-1-2:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/CTL-K27-1_L1_2.fq.gz
+  CTL-K27-2-1:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/CTL-K27-2_L1_1.fq.gz
+  CTL-K27-2-2:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/CTL-K27-2_L1_2.fq.gz
+
+  HEY2-Flag-1-1:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/HEY2-Flag-1_L1_1.fq.gz
+  HEY2-Flag-1-2:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/HEY2-Flag-1_L1_2.fq.gz
+  HEY2-Flag-2-1:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/HEY2-Flag-2_L1_1.fq.gz
+  HEY2-Flag-2-2:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/HEY2-Flag-2_L1_2.fq.gz
+
+  HEY2-K9-1-1:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/HEY2-K9-1_L1_1.fq.gz
+  HEY2-K9-1-2:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/HEY2-K9-1_L1_2.fq.gz
+  HEY2-K9-2-1:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/HEY2-K9-2_L1_1.fq.gz
+  HEY2-K9-2-2:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/HEY2-K9-2_L1_2.fq.gz
+
+  HEY2-K27-1-1:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/HEY2-K27-1_L1_1.fq.gz
+  HEY2-K27-1-2:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/HEY2-K27-1_L1_2.fq.gz
+  HEY2-K27-2-1:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/HEY2-K27-2_L1_1.fq.gz
+  HEY2-K27-2-2:   /rad/wuc/project/Hey2_review/Hey2_K9.27_ChIP/resources/HEY2-K27-2_L1_2.fq.gz
+
+
+sample: [CTL-Flag-1, CTL-Flag-2, CTL-K9-1, CTL-K9-2, CTL-K27-1, CTL-K27-2, 
+        HEY2-Flag-1, HEY2-Flag-2, HEY2-K9-1, HEY2-K9-2, HEY2-K27-1, HEY2-K27-2, ]
+
+group: [CTL-Flag, CTL-K9, CTL-K27, HEY2-Flag, HEY2-K9, HEY2-K27]
+
+group_info:
+
+  CTL-Flag:
+    treat: [CTL-Flag-1, CTL-Flag-2]
+    control: []
+
+  CTL-K9:
+    treat: [CTL-K9-1, CTL-K9-2]
+    control: []
+
+  CTL-K27:
+    treat: [CTL-K27-1, CTL-K27-2]
+    control: []
+
+
+  HEY2-Flag:
+    treat: [HEY2-Flag-1, HEY2-Flag-2]
+    control: []
+
+  HEY2-K9:
+    treat: [HEY2-K9-1, HEY2-K9-2]
+    control: []
+
+  HEY2-K27:
+    treat: [HEY2-K27-1, HEY2-K27-2]
+    control: []
+
+#-----QC----- 
+fastqc:
+  para: --quiet
+
+qualimap:
+  bamqc:
+    para: --java-mem-size=200G -outformat PDF:HTML 
+
+#----trim----
+trim:
+  para: -q 20 --length 25 -e 0.1 --phred33 --gzip --stringency 3
+
+#----aln----
+hisat2:
+  ref: /home/wuc/Ref/rn7/rn7
+  para: --no-spliced-alignment
+
+bowtie2:
+  ref: /home/wuc/Ref/rn7/rn7
+  para: ""
+
+#---rm dup---
+sambamba:
+  markdup: --overflow-list-size 2000000 --sort-buffer-size=20480 -r
+  view: -h -q 1 -F 256
+
+#--bamCoverage--
+bamCoverage:
+  para: --normalizeUsing RPKM
+
+#--macs2--
+macs2:
+  callpeak:
+    para: -g 2.63e9 -B -f BAM
+    # mm10: 2.65e9
+    # rn7:  2.63e9
+    # danRer11: 1.37e9
